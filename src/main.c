@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "builtins.h"
-#include "execute_external.h"
+#include "executor.h"
 
 #define string char*
 #define PATH_BUFFER 1024
