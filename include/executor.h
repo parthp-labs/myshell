@@ -1,6 +1,10 @@
 #ifndef EXECUTOR_H
 #define EXECUTOR_H
 
-void execute_external(char *argv[], int background, int redirect_output, char output_file[], int redirect_input, char input_file[]);
+#include "parser.h"
+
+void execute_external(struct command result, int background);
+
+void execute_pipe(struct pipe_commands pipe_cmd);
 
 #endif

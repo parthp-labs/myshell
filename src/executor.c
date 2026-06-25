@@ -4,11 +4,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include "parser.h"
 
-void execute_external(char *argv[], int background, int redirect_output, char output_file[], int redirect_input, char input_file[])
+void execute_external(struct command result, int background)
 {
     pid_t pid = fork();
-    
+
     if (background == 1 && pid != 0) {
         printf("[Background PID: %d]\n", pid);
     }
@@ -16,13 +17,13 @@ void execute_external(char *argv[], int background, int redirect_output, char ou
     if (pid == 0) {
         // Redirecting the child's output to the file
         // | is bitwise OR. All three flags are enabled simultaneously
-        if (redirect_output != 0) {
+        if (result.redirect_output != 0) {
             int fd;
             
-            if (redirect_output == 1) {
-                fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (result.redirect_output == 1) {
+                fd = open(result.output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             } else {
-                fd = open(output_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                fd = open(result.output_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
             }
             
             if (fd == -1) {
@@ -36,8 +37,8 @@ void execute_external(char *argv[], int background, int redirect_output, char ou
                 exit(EXIT_FAILURE);
             }
             close(fd);
-        } else if (redirect_input == 1) {
-            int fd = open(input_file, O_RDONLY);
+        } else if (result.redirect_input == 1) {
+            int fd = open(result.input_file, O_RDONLY);
 
             if (fd == -1) {
                 perror("open");
@@ -52,7 +53,7 @@ void execute_external(char *argv[], int background, int redirect_output, char ou
             close(fd);
         }
 
-        int process_status = execvp(argv[0], argv);
+        int process_status = execvp(result.args[0], result.args);
 
         if (process_status == -1) {
             perror("execvp");
@@ -63,4 +64,42 @@ void execute_external(char *argv[], int background, int redirect_output, char ou
     } else if (background != 1) {
         waitpid(pid, NULL, 0);
     }
+}
+
+void execute_pipe(struct pipe_commands pipe_cmd) {
+    int pipe_fd[2];
+
+    if (pipe(pipe_fd) == -1) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    };
+
+    pid_t pid1 = fork();
+
+    if (pid1 == 0) {
+        close(pipe_fd[0]);
+        dup2(pipe_fd[1], STDOUT_FILENO);
+        close(pipe_fd[1]);
+        if (execvp(pipe_cmd.left_args[0], pipe_cmd.left_args) == -1) {
+            perror("execvp");
+            exit(EXIT_FAILURE);
+        }
+    } 
+
+    pid_t pid2 = fork();
+
+    if (pid2 == 0) {
+        close(pipe_fd[1]);  
+        dup2(pipe_fd[0], STDIN_FILENO);
+        close(pipe_fd[0]);
+        if (execvp(pipe_cmd.right_args[0], pipe_cmd.right_args) == -1)  {
+            perror("execvp");
+            exit(EXIT_FAILURE);
+        } 
+    } 
+
+    close(pipe_fd[0]);
+    close(pipe_fd[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
 }

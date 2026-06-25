@@ -1,8 +1,8 @@
 CC = gcc
 
-CFLAGS = -Wall -Wextra -Iinclude
+CFLAGS = -Wextra -Iinclude
 
-SRC = src/main.c src/builtins.c src/executor.c
+SRC = src/main.c src/builtins.c src/executor.c src/parser.c
 
 TARGET = myshell
 

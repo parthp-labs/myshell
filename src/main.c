@@ -6,9 +6,15 @@
 
 #include "builtins.h"
 #include "executor.h"
+#include "parser.h"
 
 #define string char*
 #define PATH_BUFFER 1024
+
+// Parsing steps
+// Separate using |
+// Then create argv for each right and left
+// Then run exec for each section based on pipe()
 
 int main() {
     char buffer[50];
@@ -28,10 +34,6 @@ int main() {
         redirect_output = 0;
         redirect_input = 0;
 
-        // Checking for any finished child processes
-        // -1 means, wait for any child process
-        // The -1 is a special argument telling the kernel:
-        //"I don't care which child. Give me any completed child."
         while ((finished_pid = waitpid(-1, NULL, WNOHANG)) > 0) {
             printf("[Background PID %d finished]\n", finished_pid);
         }
@@ -55,99 +57,39 @@ int main() {
             continue;
         }
 
-        // Tokenizing the arguments
-        string argv[10];
-        char output_file[256];
-        char input_file[256];
-        int arg_index = 0;
-
-        char *t = strtok(buffer, " ");
-
-        while (t != NULL && arg_index < 9) {
-            if (strcmp(t, "&") == 0) {
-                background = 1;
-            } else {
-                argv[arg_index] = t;
-                arg_index++;
-            }
+        struct pipe_commands pipe_cmd = parse_pipe(buffer);
         
-            t = strtok(NULL, " ");
-        }
+        if (pipe_cmd.right_args != NULL) {
+            execute_pipe(pipe_cmd);
+        } else {
+            char** argv = malloc(100);
+            parse_args(buffer, argv);
 
-        argv[arg_index] = NULL;
-
-      
-        // Checking for redirects
-        for (int i=0;i<arg_index;i++) {
-            if (strcmp(argv[i], ">") == 0) {
-                redirect_output = 1;
+            struct command result = parse_redirection(argv);
             
-                if (argv[i+1] == NULL) {
-                    printf("Missing output file\n");
-                    break;
-                }
-                
-                strcpy(output_file, argv[i+1]);
-                argv[i] = NULL;
-                argv[i+1] = NULL;
-                i++;
-                arg_index-=2;
-                break;
-            } else if (strcmp(argv[i], ">>") == 0) {
-                redirect_output = 2;
-            
-                if (argv[i+1] == NULL) {
-                    printf("Missing output file\n");
-                    break;
-                }
-                
-                strcpy(output_file, argv[i+1]);
-                argv[i] = NULL;
-                argv[i+1] = NULL;
-                i++;
-                arg_index-=2;
-                break;
-            } else if (strcmp(argv[i], "<") == 0) {
-                redirect_input = 1;
-      
-                if (argv[i+1] == NULL) {
-                    printf("Missing input file\n");
-                    break;
-                }
-            
-                strcpy(input_file, argv[i+1]);
-                argv[i] = NULL;
-                argv[i+1] = NULL;
-                i++;
-                arg_index-=2;
-                break;
+            // for (int i=0;i<arg_index;i++) {
+            //     printf("Token %i:%s\n", i, result.args[i]);
+            // }
+            // printf("Executing command\n");
 
-            }
-        }
-
-        //    for (int i=0;i<5;i++) {
-        //     printf("Token %d: %s\n", i, argv[i]);
-        // }
-
-
-        // Handling builtin commands
-        BuiltInCommand command = get_builtin(argv[0]);
+            BuiltInCommand command = get_builtin(argv[0]);
         
-        switch(command) {
-            case BUILTIN_CD:
-                change_directory(argv[1], &cwd[0], PATH_BUFFER);
-                break;
-            case BUILTIN_EXIT:
-                printf("Goodbye!\n");
-                return 0;
-            case BUILTIN_HELP:
-                print_help();
-                break;
-            default:
-                // Running external commands
-                execute_external(argv, background, redirect_output, output_file, redirect_input, input_file);
-                break;
-        }        
+            switch(command) {
+                case BUILTIN_CD:
+                    change_directory(argv[1], &cwd[0], PATH_BUFFER);
+                    break;
+                case BUILTIN_EXIT:
+                    printf("Goodbye!\n");
+                    return 0;
+                case BUILTIN_HELP:
+                    print_help();
+                    break;
+                default:
+                    // Running external commands
+                    execute_external(result, background);
+                    break;
+            }        
+        }  
     }
 
     return 0;
